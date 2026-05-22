@@ -17,12 +17,12 @@ public interface ExamRepository extends ReactiveCrudRepository<Exam, UUID> {
 
     @Query("""
             SELECT * FROM exams
-            WHERE deleted_at IS NULL AND patient_id = :patientId
+            WHERE deleted_at IS NULL AND user_id = :userId
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
             """)
-    Flux<Exam> findPagedByPatientId(UUID patientId, int limit, long offset);
+    Flux<Exam> findPagedByUserId(UUID userId, int limit, long offset);
 
-    @Query("SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL AND patient_id = :patientId")
-    Mono<Long> countByPatientId(UUID patientId);
+    @Query("SELECT COUNT(*) FROM exams WHERE deleted_at IS NULL AND user_id = :userId")
+    Mono<Long> countByUserId(UUID userId);
 }

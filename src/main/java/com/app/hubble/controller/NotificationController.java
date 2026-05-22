@@ -46,10 +46,10 @@ public class NotificationController {
     })
     @GetMapping(value = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<PageResponse<NotificationResponse>>> getCurrentNotifications(
-            @Autenticacion Mono<UUID> userId,
+            @Autenticacion UUID userId,
             @RequestParam(name = Pagination.defaultNamePage, defaultValue = Pagination.defaultPage) int page,
             @RequestParam(name = Pagination.defaultNameSize, defaultValue = Pagination.defaultSize) int size) {
-        return userId.flatMap(uid -> notificationCatalogService.findNotificationsForCurrentUser(uid, page, size))
+        return notificationCatalogService.findNotificationsForCurrentUser(userId, page, size)
                 .map(ResponseEntity::ok);
     }
 

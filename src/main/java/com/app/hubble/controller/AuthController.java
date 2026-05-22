@@ -5,20 +5,32 @@ import com.app.hubble.dto.auth.LoginRequest;
 import com.app.hubble.dto.auth.RefreshRequest;
 import com.app.hubble.dto.auth.RegisterRequest;
 import com.app.hubble.dto.auth.ResetPasswordRequest;
-import com.app.hubble.dto.auth.TokenResponse;
+import com.app.hubble.dto.auth.AuthResponse;
+import com.app.hubble.dto.auth.RefreshTokenResponse;
+import com.app.hubble.dto.request.PatientProfileUpdateRequest;
+import com.app.hubble.dto.request.PatientRegisterRequest;
+import com.app.hubble.dto.response.UserResponse;
+import com.app.hubble.security.Autenticacion;
 import com.app.hubble.service.AuthService;
+import com.app.hubble.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.UUID;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -30,18 +42,32 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final UserService userService;
 
-    @Operation(summary = "Registro de paciente")
+    @Operation(summary = "Registro de usuario con rol y sesión JWT")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Tokens emitidos"),
-            @ApiResponse(responseCode = "400", description = "Validación del cuerpo u otras reglas de negocio")
+            @ApiResponse(responseCode = "400", description = "Validación del cuerpo u otras reglas de negocio"),
+            @ApiResponse(responseCode = "409", description = "Correo ya registrado")
     })
     @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<ResponseEntity<TokenResponse>> register(
+    public Mono<ResponseEntity<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest body,
             ServerWebExchange exchange
     ) {
         return authService.register(body, exchange).map(ResponseEntity::ok);
+    }
+
+    @Operation(summary = "Registro de paciente sin sesión (rol PATIENT)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Paciente registrado"),
+            @ApiResponse(responseCode = "400", description = "Validación inválida"),
+            @ApiResponse(responseCode = "409", description = "Correo ya registrado")
+    })
+    @PostMapping(value = "/register/patient", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<UserResponse>> registerPatient(@Valid @RequestBody PatientRegisterRequest body) {
+        return userService.registerPatient(body)
+                .map(user -> ResponseEntity.status(HttpStatus.CREATED).body(user));
     }
 
     @Operation(summary = "Inicio de sesión")
@@ -50,7 +76,7 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Credenciales incorrectas o usuario inactivo")
     })
     @PostMapping(value = "/login", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<ResponseEntity<TokenResponse>> login(
+    public Mono<ResponseEntity<AuthResponse>> login(
             @Valid @RequestBody LoginRequest body,
             ServerWebExchange exchange
     ) {
@@ -63,7 +89,7 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Refresh inválido, expirado o usuario inactivo")
     })
     @PostMapping(value = "/refresh", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<ResponseEntity<TokenResponse>> refresh(
+    public Mono<ResponseEntity<RefreshTokenResponse>> refresh(
             @Valid @RequestBody RefreshRequest body,
             ServerWebExchange exchange
     ) {
@@ -98,5 +124,24 @@ public class AuthController {
     @PostMapping(value = "/reset-password", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest body) {
         return authService.resetPassword(body).thenReturn(ResponseEntity.noContent().build());
+    }
+
+    @Operation(summary = "Actualizar perfil del paciente en sesión")
+    @SecurityRequirement(name = "bearer-jwt")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Perfil actualizado"),
+            @ApiResponse(responseCode = "400", description = "Validación inválida"),
+            @ApiResponse(responseCode = "401", description = "Sin autenticación"),
+            @ApiResponse(responseCode = "403", description = "Solo pacientes"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado"),
+            @ApiResponse(responseCode = "409", description = "Documento duplicado")
+    })
+    @PutMapping(value = "/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<UserResponse>> updatePatientProfile(
+            @Autenticacion UUID userId,
+            @Valid @RequestPart("profile") PatientProfileUpdateRequest profile,
+            @RequestPart(name = "avatar", required = false) FilePart avatar
+    ) {
+        return userService.updatePatientProfile(userId, profile, avatar).map(ResponseEntity::ok);
     }
 }

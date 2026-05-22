@@ -22,8 +22,8 @@ public class Payment {
     @Id
     private UUID id;
 
-    @Column("patient_id")
-    private UUID patientId;
+    @Column("user_id")
+    private UUID userId;
 
     @Column("appointment_id")
     private UUID appointmentId;

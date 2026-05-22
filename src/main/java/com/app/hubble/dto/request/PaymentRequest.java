@@ -17,8 +17,8 @@ import java.util.UUID;
 public class PaymentRequest {
     private UUID id;
 
-    @NotNull(message = "El identificador del paciente es obligatorio.")
-    private UUID patientId;
+    @NotNull(message = "El identificador del usuario es obligatorio.")
+    private UUID userId;
     private UUID appointmentId;
     private UUID examId;
     private UUID prescriptionId;

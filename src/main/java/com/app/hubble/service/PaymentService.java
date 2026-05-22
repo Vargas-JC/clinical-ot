@@ -7,11 +7,9 @@ import com.app.hubble.entity.User;
 import com.app.hubble.enumeration.PaymentStatus;
 import com.app.hubble.enumeration.UserRole;
 import com.app.hubble.exception.BadRequestException;
-import com.app.hubble.exception.ForbiddenException;
 import com.app.hubble.exception.NotFoundException;
 import com.app.hubble.exception.UnauthorizedException;
 import com.app.hubble.mapper.PaymentMapper;
-import com.app.hubble.repository.PatientRepository;
 import com.app.hubble.repository.PaymentRepository;
 import com.app.hubble.repository.UserRepository;
 import com.app.hubble.util.PageResponse;
@@ -28,7 +26,6 @@ import java.util.UUID;
 public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
-    private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
@@ -49,17 +46,15 @@ public class PaymentService {
                     if (user.getRole() == UserRole.ADMIN) {
                         return findAllPayments(page, size);
                     }
-                    return patientRepository.findByUserIdAndDeletedAtIsNull(userId)
-                            .switchIfEmpty(Mono.error(new ForbiddenException("Se requiere perfil de paciente.")))
-                            .flatMap(patient -> pagePaymentsForPatient(patient.getId(), page, size));
+                    return pagePaymentsForUser(userId, page, size);
                 });
     }
 
-    private Mono<PageResponse<PaymentResponse>> pagePaymentsForPatient(UUID patientId, int page, int size) {
+    private Mono<PageResponse<PaymentResponse>> pagePaymentsForUser(UUID userId, int page, int size) {
         int offset = page * size;
-        Flux<PaymentResponse> data = paymentRepository.findPagedByPatientId(patientId, size, offset)
+        Flux<PaymentResponse> data = paymentRepository.findPagedByUserId(userId, size, offset)
                 .map(paymentMapper::toResponse);
-        Mono<Long> total = paymentRepository.countActiveByPatientId(patientId);
+        Mono<Long> total = paymentRepository.countActiveByUserId(userId);
         return PageUtils.buildPage(data, total, page, size);
     }
 
@@ -72,10 +67,10 @@ public class PaymentService {
 
     public Mono<PaymentResponse> savePayment(PaymentRequest body) {
         LocalDateTime now = LocalDateTime.now();
-        return patientRepository.findById(body.getPatientId())
-                .filter(p -> p.getDeletedAt() == null)
-                .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado.")))
-                .flatMap(p -> {
+        return userRepository.findById(body.getUserId())
+                .filter(u -> u.getDeletedAt() == null)
+                .switchIfEmpty(Mono.error(new NotFoundException("Usuario no encontrado.")))
+                .flatMap(u -> {
                     Payment payment = paymentMapper.toEntity(body);
                     payment.setActive(true);
                     payment.setCreatedAt(now);
@@ -94,13 +89,13 @@ public class PaymentService {
         return paymentRepository.findById(body.getId())
                 .filter(p -> p.getDeletedAt() == null)
                 .switchIfEmpty(Mono.error(new NotFoundException("Pago no encontrado.")))
-                .flatMap(existing -> patientRepository.findById(body.getPatientId())
-                        .filter(p -> p.getDeletedAt() == null)
-                        .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado.")))
+                .flatMap(existing -> userRepository.findById(body.getUserId())
+                        .filter(u -> u.getDeletedAt() == null)
+                        .switchIfEmpty(Mono.error(new NotFoundException("Usuario no encontrado.")))
                         .thenReturn(existing))
                 .flatMap(existing -> {
                     PaymentStatus previous = existing.getStatus();
-                    existing.setPatientId(body.getPatientId());
+                    existing.setUserId(body.getUserId());
                     existing.setAppointmentId(body.getAppointmentId());
                     existing.setExamId(body.getExamId());
                     existing.setPrescriptionId(body.getPrescriptionId());
@@ -140,12 +135,10 @@ public class PaymentService {
         if (saved.getStatus() != PaymentStatus.PAID) {
             return Mono.empty();
         }
-        return patientRepository.findById(saved.getPatientId())
-                .flatMap(p -> userRepository.findById(p.getUserId())
-                        .flatMap(u -> notificationService.onPaymentCompleted(
-                                saved.getId(),
-                                p.getUserId(),
-                                saved.getAmount().toPlainString()
-                        ).onErrorResume(e -> Mono.empty())));
+        return notificationService.onPaymentCompleted(
+                saved.getId(),
+                saved.getUserId(),
+                saved.getAmount().toPlainString()
+        ).onErrorResume(e -> Mono.empty());
     }
 }

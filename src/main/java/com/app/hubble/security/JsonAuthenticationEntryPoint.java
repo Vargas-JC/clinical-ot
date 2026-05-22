@@ -1,10 +1,9 @@
 package com.app.hubble.security;
 
-import com.app.hubble.util.ApiErrorResponse;
+import com.app.hubble.util.ApiErrorWriter;
+import com.app.hubble.util.AuthErrorMessages;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
@@ -21,16 +20,7 @@ public class JsonAuthenticationEntryPoint implements ServerAuthenticationEntryPo
 
     @Override
     public Mono<Void> commence(ServerWebExchange exchange, AuthenticationException ex) {
-        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        ApiErrorResponse body = new ApiErrorResponse(HttpStatus.UNAUTHORIZED.value(), "No autorizado");
-        byte[] bytes;
-        try {
-            bytes = objectMapper.writeValueAsBytes(body);
-        } catch (Exception e) {
-            bytes = "{\"code\":401,\"message\":\"No autorizado\"}".getBytes();
-        }
-        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);
-        return exchange.getResponse().writeWith(Mono.just(buffer));
+        String message = AuthErrorMessages.fromAuthenticationException(ex);
+        return ApiErrorWriter.write(exchange, HttpStatus.UNAUTHORIZED, message, objectMapper);
     }
 }

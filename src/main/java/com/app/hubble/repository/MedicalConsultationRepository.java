@@ -18,8 +18,7 @@ public interface MedicalConsultationRepository extends ReactiveCrudRepository<Me
     @Query("""
             SELECT mc.* FROM medical_consultations mc
             INNER JOIN appointments a ON mc.appointment_id = a.id AND a.deleted_at IS NULL
-            INNER JOIN patients p ON a.patient_id = p.id AND p.deleted_at IS NULL
-            WHERE mc.deleted_at IS NULL AND p.user_id = :userId
+            WHERE mc.deleted_at IS NULL AND a.user_id = :userId
             ORDER BY mc.created_at DESC
             LIMIT :limit OFFSET :offset
             """)
@@ -29,8 +28,7 @@ public interface MedicalConsultationRepository extends ReactiveCrudRepository<Me
             SELECT COUNT(*)
             FROM medical_consultations mc
             INNER JOIN appointments a ON mc.appointment_id = a.id AND a.deleted_at IS NULL
-            INNER JOIN patients p ON a.patient_id = p.id AND p.deleted_at IS NULL
-            WHERE mc.deleted_at IS NULL AND p.user_id = :userId
+            WHERE mc.deleted_at IS NULL AND a.user_id = :userId
             """)
     Mono<Long> countActiveForPatientUser(UUID userId);
 }

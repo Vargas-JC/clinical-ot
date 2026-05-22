@@ -20,8 +20,8 @@ public class Appointment {
     @Id
     private UUID id;
 
-    @Column("patient_id")
-    private UUID patientId;
+    @Column("user_id")
+    private UUID userId;
 
     @Column("doctor_id")
     private UUID doctorId;

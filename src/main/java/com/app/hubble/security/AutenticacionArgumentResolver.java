@@ -2,7 +2,6 @@ package com.app.hubble.security;
 
 import com.app.hubble.exception.UnauthorizedException;
 import org.springframework.core.MethodParameter;
-import org.springframework.core.ResolvableType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -16,14 +15,8 @@ import java.util.UUID;
 public class AutenticacionArgumentResolver implements HandlerMethodArgumentResolver {
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
-        if (!parameter.hasParameterAnnotation(Autenticacion.class)) {
-            return false;
-        }
-        if (!Mono.class.isAssignableFrom(parameter.getParameterType())) {
-            return false;
-        }
-        Class<?> resolved = ResolvableType.forMethodParameter(parameter).getGeneric(0).resolve();
-        return resolved != null && UUID.class.isAssignableFrom(resolved);
+        return parameter.hasParameterAnnotation(Autenticacion.class)
+                && UUID.class.isAssignableFrom(parameter.getParameterType());
     }
 
     @Override

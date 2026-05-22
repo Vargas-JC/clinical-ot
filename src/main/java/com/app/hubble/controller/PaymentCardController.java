@@ -46,10 +46,10 @@ public class PaymentCardController {
     })
     @GetMapping(value = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<PageResponse<PaymentCardResponse>>> getCurrentPaymentCards(
-            @Autenticacion Mono<UUID> userId,
+            @Autenticacion UUID userId,
             @RequestParam(name = Pagination.defaultNamePage, defaultValue = Pagination.defaultPage) int page,
             @RequestParam(name = Pagination.defaultNameSize, defaultValue = Pagination.defaultSize) int size) {
-        return userId.flatMap(uid -> paymentCardService.findPaymentCardsForCurrentUser(uid, page, size)).map(ResponseEntity::ok);
+        return paymentCardService.findPaymentCardsForCurrentUser(userId, page, size).map(ResponseEntity::ok);
     }
 
     @Operation(summary = "Obtener tarjeta por id")

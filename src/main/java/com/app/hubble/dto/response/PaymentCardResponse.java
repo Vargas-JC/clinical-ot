@@ -13,14 +13,14 @@ import java.util.UUID;
 @NoArgsConstructor
 public class PaymentCardResponse {
     private UUID id;
-    private UUID patientId;
+    private UUID userId;
     private String provider;
     private String brand;
     private String lastFour;
     private short expMonth;
     private short expYear;
     private String holderName;
-    private boolean defaultForPatient;
+    private boolean defaultCard;
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

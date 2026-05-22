@@ -46,10 +46,10 @@ public class ExamController {
     })
     @GetMapping(value = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<PageResponse<ExamResponse>>> getCurrentExams(
-            @Autenticacion Mono<UUID> userId,
+            @Autenticacion UUID userId,
             @RequestParam(name = Pagination.defaultNamePage, defaultValue = Pagination.defaultPage) int page,
             @RequestParam(name = Pagination.defaultNameSize, defaultValue = Pagination.defaultSize) int size) {
-        return userId.flatMap(uid -> examService.findExamsForCurrentUser(uid, page, size)).map(ResponseEntity::ok);
+        return examService.findExamsForCurrentUser(userId, page, size).map(ResponseEntity::ok);
     }
 
     @Operation(summary = "Obtener examen por id")

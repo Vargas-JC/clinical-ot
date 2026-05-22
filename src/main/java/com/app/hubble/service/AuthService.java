@@ -7,22 +7,20 @@ import com.app.hubble.dto.auth.LoginRequest;
 import com.app.hubble.dto.auth.RefreshRequest;
 import com.app.hubble.dto.auth.RegisterRequest;
 import com.app.hubble.dto.auth.ResetPasswordRequest;
-import com.app.hubble.dto.auth.TokenResponse;
+import com.app.hubble.dto.auth.AuthResponse;
+import com.app.hubble.dto.auth.RefreshTokenResponse;
 import com.app.hubble.entity.PasswordReset;
-import com.app.hubble.entity.Patient;
 import com.app.hubble.entity.User;
 import com.app.hubble.entity.UserSession;
-import com.app.hubble.enumeration.UserRole;
 import com.app.hubble.exception.BadRequestException;
-import com.app.hubble.exception.ConflictException;
 import com.app.hubble.exception.UnauthorizedException;
 import com.app.hubble.repository.PasswordResetRepository;
-import com.app.hubble.repository.PatientRepository;
 import com.app.hubble.repository.UserRepository;
 import com.app.hubble.repository.UserSessionRepository;
 import com.app.hubble.security.JwtService;
 import com.app.hubble.util.HashUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,7 +38,6 @@ public class AuthService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
-    private final PatientRepository patientRepository;
     private final UserSessionRepository userSessionRepository;
     private final PasswordResetRepository passwordResetRepository;
     private final PasswordEncoder passwordEncoder;
@@ -48,51 +45,42 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final HubbleAppProperties appProperties;
     private final NotificationService notificationService;
+    private final UserService userService;
 
     @Transactional
-    public Mono<TokenResponse> register(RegisterRequest request, ServerWebExchange exchange) {
-        return userRepository.findActiveByEmail(request.getEmail().trim().toLowerCase())
-                .flatMap(u -> Mono.<TokenResponse>error(new ConflictException("Correo ya registrado")))
-                .switchIfEmpty(Mono.defer(() -> {
+    public Mono<AuthResponse> register(RegisterRequest request, ServerWebExchange exchange) {
+        return userService.assertRegistrationAvailable(request.getEmail(), request.getDocumentNumber())
+                .then(Mono.defer(() -> {
                     LocalDateTime now = LocalDateTime.now();
                     User user = User.builder()
                             .email(request.getEmail().trim().toLowerCase())
                             .passwordHash(passwordEncoder.encode(request.getPassword()))
                             .fullName(request.getFullName().trim())
                             .phone(request.getPhone().trim())
-                            .role(UserRole.PATIENT)
+                            .role(request.getRole())
                             .active(true)
+                            .documentNumber(request.getDocumentNumber().trim())
+                            .birthDate(request.getBirthDate())
                             .createdAt(now)
                             .updatedAt(now)
                             .build();
                     return userRepository.save(user)
-                            .flatMap(savedUser -> {
-                                Patient patient = Patient.builder()
-                                        .userId(savedUser.getId())
-                                        .documentNumber(request.getDocumentNumber().trim())
-                                        .birthDate(request.getBirthDate())
-                                        .active(true)
-                                        .createdAt(now)
-                                        .updatedAt(now)
-                                        .build();
-                                return patientRepository.save(patient).thenReturn(savedUser);
-                            })
                             .flatMap(savedUser -> notificationService.onUserRegistered(savedUser)
                                     .onErrorResume(e -> Mono.empty())
                                     .thenReturn(savedUser))
-                            .flatMap(savedUser -> buildTokens(savedUser, exchange));
+                            .flatMap(savedUser -> buildAuthResponse(savedUser, exchange));
                 }));
     }
 
-    public Mono<TokenResponse> login(LoginRequest request, ServerWebExchange exchange) {
+    public Mono<AuthResponse> login(LoginRequest request, ServerWebExchange exchange) {
         return userRepository.findActiveByEmail(request.getEmail().trim().toLowerCase())
                 .filter(u -> passwordEncoder.matches(request.getPassword(), u.getPasswordHash()))
                 .switchIfEmpty(Mono.error(new UnauthorizedException("Credenciales incorrectas")))
-                .flatMap(user -> buildTokens(user, exchange));
+                .flatMap(user -> buildAuthResponse(user, exchange));
     }
 
     @Transactional
-    public Mono<TokenResponse> refresh(RefreshRequest request, ServerWebExchange exchange) {
+    public Mono<RefreshTokenResponse> refresh(RefreshRequest request, ServerWebExchange exchange) {
         String hash = HashUtils.sha256Hex(request.getRefreshToken());
         return userSessionRepository.findActiveByRefreshTokenHash(hash)
                 .filter(s -> s.getExpiresAt().isAfter(LocalDateTime.now()))
@@ -103,7 +91,7 @@ public class AuthService {
                         .flatMap(user -> {
                             LocalDateTime now = LocalDateTime.now();
                             UserSession revoked = old.toBuilder().revokedAt(now).updatedAt(now).build();
-                            return userSessionRepository.save(revoked).then(buildTokens(user, exchange));
+                            return userSessionRepository.save(revoked).then(buildRefreshResponse(user, exchange));
                         }));
     }
 
@@ -120,35 +108,40 @@ public class AuthService {
 
     public Mono<Void> forgotPassword(ForgotPasswordRequest request) {
         String email = request.getEmail().trim().toLowerCase();
+        return userRepository.findActiveByEmail(email)
+                .flatMap(this::issuePasswordResetAndSendEmail)
+                .then();
+    }
+
+    private Mono<Void> issuePasswordResetAndSendEmail(User user) {
         LocalDateTime now = LocalDateTime.now();
         int validity = appProperties.passwordResetValidityMinutesResolved();
-        return userRepository.findActiveByEmail(email)
-                .flatMap(user -> passwordResetRepository.findByUserIdAndUsedIsFalse(user.getId())
-                        .flatMap(r -> {
-                            r.setUsed(true);
-                            return passwordResetRepository.save(r);
-                        })
-                        .then(Mono.defer(() -> {
-                            String code = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
-                            LocalDateTime expiresAt = now.plusMinutes(validity);
-                            PasswordReset row = PasswordReset.builder()
-                                    .userId(user.getId())
-                                    .code(code)
-                                    .expiresAt(expiresAt)
-                                    .used(false)
-                                    .createdAt(now)
-                                    .build();
-                            return passwordResetRepository.save(row)
-                                    .flatMap(ignored -> notificationService.sendPasswordResetOtpEmail(
-                                                    user.getEmail(),
-                                                    user.getFullName(),
-                                                    code,
-                                                    validity
-                                            )
-                                            .onErrorResume(e -> Mono.empty())
-                                            .then());
-                        })))
-                .switchIfEmpty(Mono.empty())
+        return invalidateOpenPasswordResets(user.getId())
+                .then(Mono.defer(() -> {
+                    String code = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+                    PasswordReset row = PasswordReset.builder()
+                            .userId(user.getId())
+                            .code(code)
+                            .expiresAt(now.plusMinutes(validity))
+                            .used(false)
+                            .createdAt(now)
+                            .build();
+                    return passwordResetRepository.save(row)
+                            .flatMap(saved -> notificationService.sendPasswordResetOtpEmail(
+                                    user.getEmail(),
+                                    user.getFullName(),
+                                    code,
+                                    validity
+                            ));
+                }));
+    }
+
+    private Mono<Void> invalidateOpenPasswordResets(UUID userId) {
+        return passwordResetRepository.findByUserIdAndUsedIsFalse(userId)
+                .flatMap(reset -> {
+                    reset.setUsed(true);
+                    return passwordResetRepository.save(reset);
+                })
                 .then();
     }
 
@@ -162,10 +155,9 @@ public class AuthService {
                         .filter(User::isActive)
                         .switchIfEmpty(Mono.error(new BadRequestException("Usuario no disponible.")))
                         .flatMap(user -> {
-                            user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-                            user.setUpdatedAt(now);
                             pr.setUsed(true);
-                            return userRepository.save(user)
+                            String passwordHash = passwordEncoder.encode(request.getNewPassword());
+                            return userRepository.updatePasswordById(user.getId(), passwordHash, now)
                                     .then(passwordResetRepository.save(pr))
                                     .then(revokeAllSessions(user.getId(), now));
                         }));
@@ -177,7 +169,28 @@ public class AuthService {
                 .then();
     }
 
-    private Mono<TokenResponse> buildTokens(User user, ServerWebExchange exchange) {
+    private Mono<AuthResponse> buildAuthResponse(User user, ServerWebExchange exchange) {
+        return issueTokens(user, exchange)
+                .map(tokens -> AuthResponse.builder()
+                        .accessToken(tokens.accessToken())
+                        .refreshToken(tokens.refreshToken())
+                        .tokenType("Bearer")
+                        .expiresIn(tokens.expiresIn())
+                        .user(userService.toResponse(user))
+                        .build());
+    }
+
+    private Mono<RefreshTokenResponse> buildRefreshResponse(User user, ServerWebExchange exchange) {
+        return issueTokens(user, exchange)
+                .map(tokens -> RefreshTokenResponse.builder()
+                        .accessToken(tokens.accessToken())
+                        .refreshToken(tokens.refreshToken())
+                        .tokenType("Bearer")
+                        .expiresIn(tokens.expiresIn())
+                        .build());
+    }
+
+    private Mono<IssuedTokens> issueTokens(User user, ServerWebExchange exchange) {
         LocalDateTime now = LocalDateTime.now();
         String jti = UUID.randomUUID().toString();
         String accessToken = jwtService.createAccessToken(user.getId(), user.getRole(), jti);
@@ -199,13 +212,12 @@ public class AuthService {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+        long expiresIn = jwtProperties.accessMinutes() * 60L;
         return userSessionRepository.save(session)
-                .map(s -> TokenResponse.builder()
-                        .accessToken(accessToken)
-                        .refreshToken(refreshPlain)
-                        .tokenType("Bearer")
-                        .expiresIn(jwtProperties.accessMinutes() * 60L)
-                        .build());
+                .map(s -> new IssuedTokens(accessToken, refreshPlain, expiresIn));
+    }
+
+    private record IssuedTokens(String accessToken, String refreshToken, long expiresIn) {
     }
 
     private String readUserAgent(ServerWebExchange exchange) {

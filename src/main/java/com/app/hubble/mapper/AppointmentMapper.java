@@ -13,7 +13,7 @@ public class AppointmentMapper {
                 .reason(appointmentRequest.getReason())
                 .status(appointmentRequest.getStatus())
                 .doctorId(appointmentRequest.getDoctorId())
-                .patientId(appointmentRequest.getPatientId())
+                .userId(appointmentRequest.getUserId())
                 .appointmentDate(appointmentRequest.getAppointmentDate())
                 .build();
     }

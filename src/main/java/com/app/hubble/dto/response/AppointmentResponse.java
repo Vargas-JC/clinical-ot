@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class AppointmentResponse {
     private UUID id;
-    private UUID patientId;
+    private UUID userId;
     private String patientName;
     private UUID doctorId;
     private String doctorName;

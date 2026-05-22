@@ -6,10 +6,8 @@ import com.app.hubble.entity.PaymentCard;
 import com.app.hubble.entity.User;
 import com.app.hubble.enumeration.UserRole;
 import com.app.hubble.exception.BadRequestException;
-import com.app.hubble.exception.ForbiddenException;
 import com.app.hubble.exception.NotFoundException;
 import com.app.hubble.exception.UnauthorizedException;
-import com.app.hubble.repository.PatientRepository;
 import com.app.hubble.repository.PaymentCardRepository;
 import com.app.hubble.repository.UserRepository;
 import com.app.hubble.util.PageResponse;
@@ -25,7 +23,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentCardService {
     private final PaymentCardRepository paymentCardRepository;
-    private final PatientRepository patientRepository;
     private final UserRepository userRepository;
 
     public Mono<PageResponse<PaymentCardResponse>> findAllPaymentCards(int page, int size) {
@@ -44,17 +41,15 @@ public class PaymentCardService {
                     if (user.getRole() == UserRole.ADMIN) {
                         return findAllPaymentCards(page, size);
                     }
-                    return patientRepository.findByUserIdAndDeletedAtIsNull(userId)
-                            .switchIfEmpty(Mono.error(new ForbiddenException("Se requiere perfil de paciente.")))
-                            .flatMap(patient -> pageCardsForPatient(patient.getId(), page, size));
+                    return pageCardsForUser(userId, page, size);
                 });
     }
 
-    private Mono<PageResponse<PaymentCardResponse>> pageCardsForPatient(UUID patientId, int page, int size) {
+    private Mono<PageResponse<PaymentCardResponse>> pageCardsForUser(UUID userId, int page, int size) {
         int offset = page * size;
-        Flux<PaymentCardResponse> data = paymentCardRepository.findPagedByPatientId(patientId, size, offset)
+        Flux<PaymentCardResponse> data = paymentCardRepository.findPagedByUserId(userId, size, offset)
                 .map(this::toResponse);
-        Mono<Long> total = paymentCardRepository.countByPatientId(patientId);
+        Mono<Long> total = paymentCardRepository.countByUserId(userId);
         return PageUtils.buildPage(data, total, page, size);
     }
 
@@ -69,12 +64,12 @@ public class PaymentCardService {
         LocalDateTime now = LocalDateTime.now();
         short month = body.getExpMonth().shortValue();
         short year = body.getExpYear().shortValue();
-        return patientRepository.findById(body.getPatientId())
-                .filter(p -> p.getDeletedAt() == null)
-                .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado.")))
-                .flatMap(p -> {
+        return userRepository.findById(body.getUserId())
+                .filter(u -> u.getDeletedAt() == null)
+                .switchIfEmpty(Mono.error(new NotFoundException("Usuario no encontrado.")))
+                .flatMap(u -> {
                     PaymentCard row = PaymentCard.builder()
-                            .patientId(body.getPatientId())
+                            .userId(body.getUserId())
                             .provider(body.getProvider().trim())
                             .providerCardToken(body.getProviderCardToken().trim())
                             .brand(body.getBrand().trim())
@@ -82,7 +77,7 @@ public class PaymentCardService {
                             .expMonth(month)
                             .expYear(year)
                             .holderName(body.getHolderName().trim())
-                            .defaultForPatient(body.isDefaultForPatient())
+                            .defaultForPatient(body.isDefaultCard())
                             .active(true)
                             .createdAt(now)
                             .updatedAt(now)
@@ -102,11 +97,11 @@ public class PaymentCardService {
         return paymentCardRepository.findById(body.getId())
                 .filter(c -> c.getDeletedAt() == null)
                 .switchIfEmpty(Mono.error(new NotFoundException("Tarjeta no encontrada.")))
-                .flatMap(row -> patientRepository.findById(body.getPatientId())
-                        .filter(p -> p.getDeletedAt() == null)
-                        .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado.")))
-                        .flatMap(p -> {
-                            row.setPatientId(body.getPatientId());
+                .flatMap(row -> userRepository.findById(body.getUserId())
+                        .filter(u -> u.getDeletedAt() == null)
+                        .switchIfEmpty(Mono.error(new NotFoundException("Usuario no encontrado.")))
+                        .flatMap(u -> {
+                            row.setUserId(body.getUserId());
                             row.setProvider(body.getProvider().trim());
                             row.setProviderCardToken(body.getProviderCardToken().trim());
                             row.setBrand(body.getBrand().trim());
@@ -114,7 +109,7 @@ public class PaymentCardService {
                             row.setExpMonth(month);
                             row.setExpYear(year);
                             row.setHolderName(body.getHolderName().trim());
-                            row.setDefaultForPatient(body.isDefaultForPatient());
+                            row.setDefaultForPatient(body.isDefaultCard());
                             row.setActive(body.isActive());
                             row.setUpdatedAt(now);
                             return paymentCardRepository.save(row);
@@ -139,14 +134,14 @@ public class PaymentCardService {
     private PaymentCardResponse toResponse(PaymentCard c) {
         return PaymentCardResponse.builder()
                 .id(c.getId())
-                .patientId(c.getPatientId())
+                .userId(c.getUserId())
                 .provider(c.getProvider())
                 .brand(c.getBrand())
                 .lastFour(c.getLastFour())
                 .expMonth(c.getExpMonth())
                 .expYear(c.getExpYear())
                 .holderName(c.getHolderName())
-                .defaultForPatient(c.isDefaultForPatient())
+                .defaultCard(c.isDefaultForPatient())
                 .active(c.isActive())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())

@@ -47,10 +47,10 @@ public class AppointmentController {
     })
     @GetMapping(value = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<PageResponse<AppointmentResponse>>> getCurrentAppointments(
-            @Autenticacion Mono<UUID> userId,
+            @Autenticacion UUID userId,
             @RequestParam(name = Pagination.defaultNamePage, defaultValue = Pagination.defaultPage) int page,
             @RequestParam(name = Pagination.defaultNameSize, defaultValue = Pagination.defaultSize) int size) {
-        return userId.flatMap(uid -> appointmentService.findAppointmentsForCurrentUser(uid, page, size)).map(ResponseEntity::ok);
+        return appointmentService.findAppointmentsForCurrentUser(userId, page, size).map(ResponseEntity::ok);
     }
 
     @Operation(summary = "Obtener cita por id")

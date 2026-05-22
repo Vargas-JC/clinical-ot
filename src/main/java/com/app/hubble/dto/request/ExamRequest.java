@@ -16,8 +16,8 @@ import java.util.UUID;
 public class ExamRequest {
     private UUID id;
 
-    @NotNull(message = "El identificador del paciente es obligatorio.")
-    private UUID patientId;
+    @NotNull(message = "El identificador del usuario es obligatorio.")
+    private UUID userId;
     private UUID consultationId;
 
     @NotNull(message = "El tipo de examen es obligatorio.")

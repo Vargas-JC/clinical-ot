@@ -6,12 +6,10 @@ import com.app.hubble.entity.Exam;
 import com.app.hubble.entity.User;
 import com.app.hubble.enumeration.UserRole;
 import com.app.hubble.exception.BadRequestException;
-import com.app.hubble.exception.ForbiddenException;
 import com.app.hubble.exception.NotFoundException;
 import com.app.hubble.exception.UnauthorizedException;
 import com.app.hubble.repository.ExamRepository;
 import com.app.hubble.repository.MedicalConsultationRepository;
-import com.app.hubble.repository.PatientRepository;
 import com.app.hubble.repository.UserRepository;
 import com.app.hubble.util.PageResponse;
 import com.app.hubble.util.PageUtils;
@@ -26,7 +24,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ExamService {
     private final ExamRepository examRepository;
-    private final PatientRepository patientRepository;
     private final MedicalConsultationRepository medicalConsultationRepository;
     private final UserRepository userRepository;
 
@@ -46,16 +43,14 @@ public class ExamService {
                     if (user.getRole() == UserRole.ADMIN) {
                         return findAllExams(page, size);
                     }
-                    return patientRepository.findByUserIdAndDeletedAtIsNull(userId)
-                            .switchIfEmpty(Mono.error(new ForbiddenException("Se requiere perfil de paciente.")))
-                            .flatMap(patient -> pageExamsForPatient(patient.getId(), page, size));
+                    return pageExamsForUser(userId, page, size);
                 });
     }
 
-    private Mono<PageResponse<ExamResponse>> pageExamsForPatient(UUID patientId, int page, int size) {
+    private Mono<PageResponse<ExamResponse>> pageExamsForUser(UUID userId, int page, int size) {
         int offset = page * size;
-        Flux<ExamResponse> data = examRepository.findPagedByPatientId(patientId, size, offset).map(this::toResponse);
-        Mono<Long> total = examRepository.countByPatientId(patientId);
+        Flux<ExamResponse> data = examRepository.findPagedByUserId(userId, size, offset).map(this::toResponse);
+        Mono<Long> total = examRepository.countByUserId(userId);
         return PageUtils.buildPage(data, total, page, size);
     }
 
@@ -68,13 +63,13 @@ public class ExamService {
 
     public Mono<ExamResponse> saveExam(ExamRequest body) {
         LocalDateTime now = LocalDateTime.now();
-        return patientRepository.findById(body.getPatientId())
-                .filter(p -> p.getDeletedAt() == null)
-                .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado.")))
-                .flatMap(p -> requireConsultationIfPresent(body.getConsultationId()).thenReturn(p))
-                .flatMap(p -> {
+        return userRepository.findById(body.getUserId())
+                .filter(u -> u.getDeletedAt() == null)
+                .switchIfEmpty(Mono.error(new NotFoundException("Usuario no encontrado.")))
+                .flatMap(u -> requireConsultationIfPresent(body.getConsultationId()).thenReturn(u))
+                .flatMap(u -> {
                     Exam row = Exam.builder()
-                            .patientId(body.getPatientId())
+                            .userId(body.getUserId())
                             .consultationId(body.getConsultationId())
                             .type(body.getType())
                             .result(blankToNull(body.getResult()))
@@ -95,13 +90,13 @@ public class ExamService {
         return examRepository.findById(body.getId())
                 .filter(e -> e.getDeletedAt() == null)
                 .switchIfEmpty(Mono.error(new NotFoundException("Examen no encontrado.")))
-                .flatMap(row -> patientRepository.findById(body.getPatientId())
-                        .filter(p -> p.getDeletedAt() == null)
-                        .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado.")))
+                .flatMap(row -> userRepository.findById(body.getUserId())
+                        .filter(u -> u.getDeletedAt() == null)
+                        .switchIfEmpty(Mono.error(new NotFoundException("Usuario no encontrado.")))
                         .then(requireConsultationIfPresent(body.getConsultationId()))
                         .thenReturn(row)
                         .flatMap(r -> {
-                            r.setPatientId(body.getPatientId());
+                            r.setUserId(body.getUserId());
                             r.setConsultationId(body.getConsultationId());
                             r.setType(body.getType());
                             r.setResult(blankToNull(body.getResult()));
@@ -146,7 +141,7 @@ public class ExamService {
     private ExamResponse toResponse(Exam e) {
         return ExamResponse.builder()
                 .id(e.getId())
-                .patientId(e.getPatientId())
+                .userId(e.getUserId())
                 .consultationId(e.getConsultationId())
                 .type(e.getType())
                 .result(e.getResult() == null ? "" : e.getResult())

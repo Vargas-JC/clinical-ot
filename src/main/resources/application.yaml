@@ -13,7 +13,7 @@ spring:
     port: 587
     protocol: smtp
     username: jcvargas.dev@gmail.com
-    password: "cdni bqij dcpw azfv"
+    password: ${MAIL_APP_PASSWORD:cdnibqijdcpwazfv}
     default-encoding: UTF-8
     properties:
       mail.smtp.auth: true
@@ -34,7 +34,9 @@ hubble:
     access-minutes: 15
     refresh-days: 30
   app:
-    password-reset-validity-minutes: 60
+    password-reset-validity-minutes: 3
+    storage-path: D:\storage
+    max-avatar-size-bytes: 5242880
 
 springdoc:
   api-docs:

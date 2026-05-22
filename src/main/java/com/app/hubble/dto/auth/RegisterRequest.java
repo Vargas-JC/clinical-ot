@@ -1,5 +1,6 @@
 package com.app.hubble.dto.auth;
 
+import com.app.hubble.enumeration.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -38,4 +39,7 @@ public class RegisterRequest {
 
     @NotNull(message = "La fecha de nacimiento es obligatoria.")
     private LocalDate birthDate;
+
+    @NotNull(message = "El rol es obligatorio.")
+    private UserRole role;
 }

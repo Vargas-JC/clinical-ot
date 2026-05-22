@@ -18,8 +18,8 @@ import java.util.UUID;
 public class PaymentCardRequest {
     private UUID id;
 
-    @NotNull(message = "El identificador del paciente es obligatorio.")
-    private UUID patientId;
+    @NotNull(message = "El identificador del usuario es obligatorio.")
+    private UUID userId;
 
     @NotBlank(message = "El proveedor de pago es obligatorio.")
     @Size(max = 50, message = "El proveedor admite como máximo 50 caracteres.")
@@ -50,6 +50,6 @@ public class PaymentCardRequest {
     @NotBlank(message = "El nombre del titular es obligatorio.")
     @Size(max = 100, message = "El nombre del titular admite como máximo 100 caracteres.")
     private String holderName;
-    private boolean defaultForPatient;
+    private boolean defaultCard;
     private boolean active;
 }

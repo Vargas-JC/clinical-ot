@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public interface AppointmentView {
     UUID getId();
-    UUID getPatientId();
+    UUID getUserId();
     String getPatientName();
     UUID getDoctorId();
     String getDoctorName();

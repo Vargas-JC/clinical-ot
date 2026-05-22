@@ -12,7 +12,7 @@ public class PaymentMapper {
     public Payment toEntity(PaymentRequest request) {
         return Payment.builder()
                 .id(request.getId())
-                .patientId(request.getPatientId())
+                .userId(request.getUserId())
                 .appointmentId(request.getAppointmentId())
                 .examId(request.getExamId())
                 .prescriptionId(request.getPrescriptionId())
@@ -27,7 +27,7 @@ public class PaymentMapper {
     public PaymentResponse toResponse(Payment payment) {
         return PaymentResponse.builder()
                 .id(payment.getId())
-                .patientId(payment.getPatientId())
+                .userId(payment.getUserId())
                 .appointmentId(payment.getAppointmentId())
                 .examId(payment.getExamId())
                 .prescriptionId(payment.getPrescriptionId())

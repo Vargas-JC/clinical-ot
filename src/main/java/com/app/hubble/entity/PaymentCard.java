@@ -19,8 +19,8 @@ public class PaymentCard {
     @Id
     private UUID id;
 
-    @Column("patient_id")
-    private UUID patientId;
+    @Column("user_id")
+    private UUID userId;
     private String provider;
 
     @Column("provider_card_token")

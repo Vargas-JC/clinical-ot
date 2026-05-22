@@ -16,7 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class PaymentResponse {
     private UUID id;
-    private UUID patientId;
+    private UUID userId;
     private UUID appointmentId;
     private UUID examId;
     private UUID prescriptionId;

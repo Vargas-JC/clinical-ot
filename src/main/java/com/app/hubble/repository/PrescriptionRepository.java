@@ -19,8 +19,7 @@ public interface PrescriptionRepository extends ReactiveCrudRepository<Prescript
             SELECT pr.* FROM prescriptions pr
             INNER JOIN medical_consultations mc ON pr.consultation_id = mc.id AND mc.deleted_at IS NULL
             INNER JOIN appointments a ON mc.appointment_id = a.id AND a.deleted_at IS NULL
-            INNER JOIN patients p ON a.patient_id = p.id AND p.deleted_at IS NULL
-            WHERE pr.deleted_at IS NULL AND p.user_id = :userId
+            WHERE pr.deleted_at IS NULL AND a.user_id = :userId
             ORDER BY pr.created_at DESC
             LIMIT :limit OFFSET :offset
             """)
@@ -31,8 +30,7 @@ public interface PrescriptionRepository extends ReactiveCrudRepository<Prescript
             FROM prescriptions pr
             INNER JOIN medical_consultations mc ON pr.consultation_id = mc.id AND mc.deleted_at IS NULL
             INNER JOIN appointments a ON mc.appointment_id = a.id AND a.deleted_at IS NULL
-            INNER JOIN patients p ON a.patient_id = p.id AND p.deleted_at IS NULL
-            WHERE pr.deleted_at IS NULL AND p.user_id = :userId
+            WHERE pr.deleted_at IS NULL AND a.user_id = :userId
             """)
     Mono<Long> countActiveForPatientUser(UUID userId);
 }

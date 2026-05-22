@@ -7,8 +7,10 @@ import com.app.hubble.enumeration.NotificationType;
 import com.app.hubble.repository.NotificationRepository;
 import com.app.hubble.repository.UserRepository;
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -22,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
@@ -58,35 +61,53 @@ public class NotificationService {
     }
 
     public Mono<Void> sendPasswordResetOtpEmail(String emailTo, String userName, String otpCode, int validityMinutes) {
-        return Mono.fromRunnable(() -> {
-            try {
-                String title = "Recuperación de contraseña — " + ClinicBranding.DISPLAY_NAME;
-                Context ctx = new Context();
-                ctx.setVariable("title", title);
-                ctx.setVariable("userName", userName);
-                ctx.setVariable("otpCode", otpCode);
-                ctx.setVariable("validityMinutes", validityMinutes);
-                String html = mailTemplateEngine.process("password-reset", ctx);
-                MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-                helper.setFrom(ClinicBranding.DISPLAY_NAME + " <" + mailUsername() + ">");
-                helper.setTo(emailTo);
-                helper.setSubject(title);
-                helper.setText(html, true);
-                ClassPathResource logo = new ClassPathResource("logo/logo-negro.png");
-                if (logo.exists()) {
-                    helper.addInline("logo", logo);
-                }
-                javaMailSender.send(mimeMessage);
-            } catch (MessagingException e) {
-                throw new RuntimeException(e);
+        String title = "Recuperación de contraseña - " + ClinicBranding.DISPLAY_NAME;
+        Context ctx = new Context();
+        ctx.setVariable("title", title);
+        ctx.setVariable("userName", userName);
+        ctx.setVariable("otpCode", otpCode);
+        ctx.setVariable("validityMinutes", validityMinutes);
+        return sendHtmlEmail(emailTo, title, "password-reset", ctx, "recuperación de contraseña");
+    }
+
+    private Mono<Void> sendHtmlEmail(String emailTo, String subject, String template, Context context, String purpose) {
+        return Mono.fromCallable(() -> {
+            String html = mailTemplateEngine.process(template, context);
+            MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(buildFromAddress());
+            helper.setTo(emailTo);
+            helper.setSubject(subject);
+            helper.setText(html, true);
+            ClassPathResource logo = new ClassPathResource("logo/logo-negro.png");
+            if (logo.exists()) {
+                helper.addInline("logo", logo);
             }
-        }).subscribeOn(Schedulers.boundedElastic()).then();
+            javaMailSender.send(mimeMessage);
+            return true;
+        })
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(ignored -> log.info("Correo de {} enviado a {}", purpose, emailTo))
+                .doOnError(error -> log.error("No se pudo enviar el correo de {} a {}: {}", purpose, emailTo,
+                        error.getMessage(), error))
+                .then();
+    }
+
+    private InternetAddress buildFromAddress() throws MessagingException {
+        String username = mailUsername();
+        if (username.isBlank()) {
+            throw new MessagingException("spring.mail.username no está configurado.");
+        }
+        try {
+            return new InternetAddress(username, ClinicBranding.DISPLAY_NAME, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException encodingException) {
+            throw new MessagingException(encodingException.getMessage(), encodingException);
+        }
     }
 
     private String mailUsername() {
-        String u = environment.getProperty("spring.mail.username");
-        return u == null ? "" : u;
+        String username = environment.getProperty("spring.mail.username");
+        return username == null ? "" : username.trim();
     }
 
     private Mono<Void> persistAndEmail(
@@ -115,32 +136,18 @@ public class NotificationService {
                         .then(Mono.defer(() -> notificationRepository.save(
                                 saved.toBuilder().emailSentAt(LocalDateTime.now()).build()
                         )))
-                        .onErrorResume(e -> Mono.empty())
+                        .onErrorResume(error -> {
+                            log.warn("Notificación guardada sin correo para {}: {}", emailTo, error.getMessage());
+                            return Mono.just(saved);
+                        })
                 )
                 .then();
     }
 
     private Mono<Void> sendSimpleNotificationEmail(String to, String title, String message) {
-        return Mono.fromRunnable(() -> {
-            try {
-                Context ctx = new Context();
-                ctx.setVariable("title", title);
-                ctx.setVariable("message", message);
-                String html = mailTemplateEngine.process("notification", ctx);
-                MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-                helper.setFrom(ClinicBranding.DISPLAY_NAME + " <" + mailUsername() + ">");
-                helper.setTo(to);
-                helper.setSubject(title);
-                helper.setText(html, true);
-                ClassPathResource logo = new ClassPathResource("logo/logo-negro.png");
-                if (logo.exists()) {
-                    helper.addInline("logo", logo);
-                }
-                javaMailSender.send(mimeMessage);
-            } catch (MessagingException e) {
-                throw new RuntimeException(e);
-            }
-        }).subscribeOn(Schedulers.boundedElastic()).then();
+        Context ctx = new Context();
+        ctx.setVariable("title", title);
+        ctx.setVariable("message", message);
+        return sendHtmlEmail(to, title, "notification", ctx, "notificación");
     }
 }

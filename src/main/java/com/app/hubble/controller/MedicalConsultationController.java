@@ -46,10 +46,10 @@ public class MedicalConsultationController {
     })
     @GetMapping(value = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<ResponseEntity<PageResponse<MedicalConsultationResponse>>> getCurrentMedicalConsultations(
-            @Autenticacion Mono<UUID> userId,
+            @Autenticacion UUID userId,
             @RequestParam(name = Pagination.defaultNamePage, defaultValue = Pagination.defaultPage) int page,
             @RequestParam(name = Pagination.defaultNameSize, defaultValue = Pagination.defaultSize) int size) {
-        return userId.flatMap(uid -> medicalConsultationService.findMedicalConsultationsForCurrentUser(uid, page, size))
+        return medicalConsultationService.findMedicalConsultationsForCurrentUser(userId, page, size)
                 .map(ResponseEntity::ok);
     }
 

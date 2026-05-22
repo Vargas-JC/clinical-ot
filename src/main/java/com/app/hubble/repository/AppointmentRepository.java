@@ -14,7 +14,7 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
     @Query("""
                 SELECT
                     a.id,
-                    a.patient_id AS patientId,
+                    a.user_id AS userId,
                     pu.full_name AS patientName,
                     a.doctor_id AS doctorId,
                     du.full_name AS doctorName,
@@ -25,10 +25,8 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
                     a.created_at AS createdAt,
                     a.updated_at AS updatedAt
                 FROM appointments a
-                INNER JOIN patients p ON a.patient_id = p.id
-                INNER JOIN users pu ON p.user_id = pu.id
-                INNER JOIN doctors d ON a.doctor_id = d.id
-                INNER JOIN users du ON d.user_id = du.id
+                INNER JOIN users pu ON a.user_id = pu.id
+                INNER JOIN users du ON a.doctor_id = du.id
                 WHERE a.deleted_at IS NULL
                 ORDER BY a.appointment_date DESC
                 LIMIT :limit OFFSET :offset
@@ -38,7 +36,7 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
     @Query("""
             SELECT
                 a.id,
-                a.patient_id AS patientId,
+                a.user_id AS userId,
                 pu.full_name AS patientName,
                 a.doctor_id AS doctorId,
                 du.full_name AS doctorName,
@@ -49,10 +47,8 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
                 a.created_at AS createdAt,
                 a.updated_at AS updatedAt
             FROM appointments a
-            INNER JOIN patients p ON a.patient_id = p.id
-            INNER JOIN users pu ON p.user_id = pu.id
-            INNER JOIN doctors d ON a.doctor_id = d.id
-            INNER JOIN users du ON d.user_id = du.id
+            INNER JOIN users pu ON a.user_id = pu.id
+            INNER JOIN users du ON a.doctor_id = du.id
             WHERE a.id = :id AND a.deleted_at IS NULL
             LIMIT 1
             """)
@@ -64,7 +60,7 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
     @Query("""
                 SELECT
                     a.id,
-                    a.patient_id AS patientId,
+                    a.user_id AS userId,
                     pu.full_name AS patientName,
                     a.doctor_id AS doctorId,
                     du.full_name AS doctorName,
@@ -75,27 +71,25 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
                     a.created_at AS createdAt,
                     a.updated_at AS updatedAt
                 FROM appointments a
-                INNER JOIN patients p ON a.patient_id = p.id
-                INNER JOIN users pu ON p.user_id = pu.id
-                INNER JOIN doctors d ON a.doctor_id = d.id
-                INNER JOIN users du ON d.user_id = du.id
-                WHERE a.deleted_at IS NULL AND a.patient_id = :patientId
+                INNER JOIN users pu ON a.user_id = pu.id
+                INNER JOIN users du ON a.doctor_id = du.id
+                WHERE a.deleted_at IS NULL AND a.user_id = :userId
                 ORDER BY a.appointment_date DESC
                 LIMIT :limit OFFSET :offset
             """)
-    Flux<AppointmentView> findPagedByPatientId(UUID patientId, int limit, long offset);
+    Flux<AppointmentView> findPagedByUserId(UUID userId, int limit, long offset);
 
     @Query("""
             SELECT COUNT(*)
             FROM appointments a
-            WHERE a.deleted_at IS NULL AND a.patient_id = :patientId
+            WHERE a.deleted_at IS NULL AND a.user_id = :userId
             """)
-    Mono<Long> countActiveByPatientId(UUID patientId);
+    Mono<Long> countActiveByUserId(UUID userId);
 
     @Query("""
                 SELECT
                     a.id,
-                    a.patient_id AS patientId,
+                    a.user_id AS userId,
                     pu.full_name AS patientName,
                     a.doctor_id AS doctorId,
                     du.full_name AS doctorName,
@@ -106,10 +100,8 @@ public interface AppointmentRepository extends ReactiveCrudRepository<Appointmen
                     a.created_at AS createdAt,
                     a.updated_at AS updatedAt
                 FROM appointments a
-                INNER JOIN patients p ON a.patient_id = p.id
-                INNER JOIN users pu ON p.user_id = pu.id
-                INNER JOIN doctors d ON a.doctor_id = d.id
-                INNER JOIN users du ON d.user_id = du.id
+                INNER JOIN users pu ON a.user_id = pu.id
+                INNER JOIN users du ON a.doctor_id = du.id
                 WHERE a.deleted_at IS NULL AND a.doctor_id = :doctorId
                 ORDER BY a.appointment_date DESC
                 LIMIT :limit OFFSET :offset

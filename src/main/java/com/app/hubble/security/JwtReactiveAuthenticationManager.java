@@ -1,5 +1,6 @@
 package com.app.hubble.security;
 
+import com.app.hubble.util.AuthErrorMessages;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,7 +22,7 @@ public class JwtReactiveAuthenticationManager implements ReactiveAuthenticationM
     public Mono<Authentication> authenticate(Authentication authentication) {
         Object credentials = authentication.getCredentials();
         if (!(credentials instanceof String token) || token.isEmpty()) {
-            return Mono.error(new BadCredentialsException("Token ausente"));
+            return Mono.error(new BadCredentialsException(AuthErrorMessages.TOKEN_MISSING));
         }
         return Mono.fromCallable(() -> jwtService.parseAccessToken(token))
                 .subscribeOn(Schedulers.boundedElastic())
@@ -35,6 +36,6 @@ public class JwtReactiveAuthenticationManager implements ReactiveAuthenticationM
                             java.util.List.of(new SimpleGrantedAuthority(authority))
                     );
                 })
-                .onErrorMap(ex -> new BadCredentialsException("Token inválido", ex));
+                .onErrorMap(AuthErrorMessages::toBadCredentials);
     }
 }

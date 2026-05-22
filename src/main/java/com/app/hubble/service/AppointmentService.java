@@ -7,15 +7,10 @@ import com.app.hubble.entity.User;
 import com.app.hubble.enumeration.AppointmentStatus;
 import com.app.hubble.enumeration.UserRole;
 import com.app.hubble.exception.BadRequestException;
-import com.app.hubble.exception.ForbiddenException;
 import com.app.hubble.exception.NotFoundException;
 import com.app.hubble.exception.UnauthorizedException;
 import com.app.hubble.mapper.AppointmentMapper;
-import com.app.hubble.entity.Doctor;
-import com.app.hubble.entity.Patient;
 import com.app.hubble.repository.AppointmentRepository;
-import com.app.hubble.repository.DoctorRepository;
-import com.app.hubble.repository.PatientRepository;
 import com.app.hubble.repository.UserRepository;
 import com.app.hubble.repository.view.AppointmentView;
 import com.app.hubble.util.PageResponse;
@@ -32,8 +27,6 @@ import java.util.UUID;
 public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final AppointmentMapper appointmentMapper;
-    private final PatientRepository patientRepository;
-    private final DoctorRepository doctorRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
@@ -55,25 +48,21 @@ public class AppointmentService {
                     if (user.getRole() == UserRole.ADMIN) {
                         return findAllAppointments(page, size);
                     }
-                    Mono<Patient> patientMono = patientRepository.findByUserIdAndDeletedAtIsNull(userId);
-                    Mono<Doctor> doctorMono = doctorRepository.findByUserIdAndDeletedAtIsNull(userId);
-                    return patientMono
-                            .flatMap(patient -> pageAppointmentsForPatient(patient.getId(), page, size, offset))
-                            .switchIfEmpty(doctorMono
-                                    .flatMap(doctor -> pageAppointmentsForDoctor(doctor.getId(), page, size, offset))
-                                    .switchIfEmpty(Mono.error(new ForbiddenException(
-                                            "No hay perfil de paciente ni de doctor asociado a la sesión."))));
+                    if (user.getRole() == UserRole.PATIENT) {
+                        return pageAppointmentsForPatient(userId, page, size, offset);
+                    }
+                    return pageAppointmentsForDoctor(userId, page, size, offset);
                 });
     }
 
     private Mono<PageResponse<AppointmentResponse>> pageAppointmentsForPatient(
-            UUID patientId,
+            UUID userId,
             int page,
             int size,
             int offset) {
-        Flux<AppointmentResponse> data = appointmentRepository.findPagedByPatientId(patientId, size, offset)
+        Flux<AppointmentResponse> data = appointmentRepository.findPagedByUserId(userId, size, offset)
                 .map(this::toResponse);
-        Mono<Long> total = appointmentRepository.countActiveByPatientId(patientId);
+        Mono<Long> total = appointmentRepository.countActiveByUserId(userId);
         return PageUtils.buildPage(data, total, page, size);
     }
 
@@ -97,16 +86,16 @@ public class AppointmentService {
     public Mono<AppointmentResponse> saveAppointment(AppointmentRequest body) {
         LocalDateTime now = LocalDateTime.now();
         return Mono.zip(
-                        patientRepository.findById(body.getPatientId())
-                                .filter(p -> p.getDeletedAt() == null)
+                        userRepository.findById(body.getUserId())
+                                .filter(u -> u.getDeletedAt() == null && u.getRole() == UserRole.PATIENT)
                                 .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado."))),
-                        doctorRepository.findById(body.getDoctorId())
-                                .filter(d -> d.getDeletedAt() == null)
+                        userRepository.findById(body.getDoctorId())
+                                .filter(u -> u.getDeletedAt() == null && u.getRole() != UserRole.PATIENT)
                                 .switchIfEmpty(Mono.error(new NotFoundException("Doctor no encontrado.")))
                 )
                 .flatMap(tuple -> {
                     Appointment appointment = appointmentMapper.toEntity(body);
-                    appointment.setPatientId(tuple.getT1().getId());
+                    appointment.setUserId(tuple.getT1().getId());
                     appointment.setDoctorId(tuple.getT2().getId());
                     appointment.setActive(true);
                     appointment.setCreatedAt(now);
@@ -114,17 +103,19 @@ public class AppointmentService {
                     if (appointment.getStatus() == null) {
                         appointment.setStatus(AppointmentStatus.SCHEDULED);
                     }
-                    return appointmentRepository.save(appointment);
+                    return appointmentRepository.save(appointment).zipWith(Mono.just(tuple.getT1()));
                 })
-                .flatMap(saved -> patientRepository.findById(saved.getPatientId())
-                        .flatMap(p -> userRepository.findById(p.getUserId())
-                                .flatMap(u -> notificationService.onAppointmentReserved(
-                                                saved.getId(),
-                                                p.getUserId(),
-                                                u.getFullName(),
-                                                saved.getAppointmentDate())
-                                        .onErrorResume(e -> Mono.empty())
-                                        .thenReturn(saved))))
+                .flatMap(tuple -> {
+                    Appointment saved = tuple.getT1();
+                    User patientUser = tuple.getT2();
+                    return notificationService.onAppointmentReserved(
+                                    saved.getId(),
+                                    patientUser.getId(),
+                                    patientUser.getFullName(),
+                                    saved.getAppointmentDate())
+                            .onErrorResume(e -> Mono.empty())
+                            .thenReturn(saved);
+                })
                 .flatMap(saved -> appointmentRepository.findAppointmentById(saved.getId()).map(this::toResponse));
     }
 
@@ -138,15 +129,15 @@ public class AppointmentService {
                 .switchIfEmpty(Mono.error(new NotFoundException("Cita no encontrada.")))
                 .flatMap(appointment ->
                         Mono.zip(
-                                        patientRepository.findById(body.getPatientId())
-                                                .filter(p -> p.getDeletedAt() == null)
+                                        userRepository.findById(body.getUserId())
+                                                .filter(u -> u.getDeletedAt() == null && u.getRole() == UserRole.PATIENT)
                                                 .switchIfEmpty(Mono.error(new NotFoundException("Paciente no encontrado."))),
-                                        doctorRepository.findById(body.getDoctorId())
-                                                .filter(d -> d.getDeletedAt() == null)
+                                        userRepository.findById(body.getDoctorId())
+                                                .filter(u -> u.getDeletedAt() == null && u.getRole() != UserRole.PATIENT)
                                                 .switchIfEmpty(Mono.error(new NotFoundException("Doctor no encontrado.")))
                                 )
                                 .map(tuple -> {
-                                    appointment.setPatientId(tuple.getT1().getId());
+                                    appointment.setUserId(tuple.getT1().getId());
                                     appointment.setDoctorId(tuple.getT2().getId());
                                     appointment.setStatus(body.getStatus());
                                     appointment.setActive(body.isActive());
@@ -176,7 +167,7 @@ public class AppointmentService {
     private AppointmentResponse toResponse(AppointmentView view) {
         return AppointmentResponse.builder()
                 .id(view.getId())
-                .patientId(view.getPatientId())
+                .userId(view.getUserId())
                 .patientName(view.getPatientName())
                 .doctorId(view.getDoctorId())
                 .doctorName(view.getDoctorName())

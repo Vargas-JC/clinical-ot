@@ -19,7 +19,7 @@ public interface PasswordResetRepository extends ReactiveCrudRepository<Password
             INNER JOIN users u ON pr.user_id = u.id
             WHERE u.email = :email
               AND u.deleted_at IS NULL
-              AND pr.code = :code
+              AND TRIM(pr.code) = :code
               AND pr.used = FALSE
               AND pr.expires_at > :now
             LIMIT 1

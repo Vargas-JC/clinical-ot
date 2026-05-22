@@ -6,11 +6,9 @@ import com.app.hubble.entity.Prescription;
 import com.app.hubble.entity.User;
 import com.app.hubble.enumeration.UserRole;
 import com.app.hubble.exception.BadRequestException;
-import com.app.hubble.exception.ForbiddenException;
 import com.app.hubble.exception.NotFoundException;
 import com.app.hubble.exception.UnauthorizedException;
 import com.app.hubble.repository.MedicalConsultationRepository;
-import com.app.hubble.repository.PatientRepository;
 import com.app.hubble.repository.PrescriptionRepository;
 import com.app.hubble.repository.UserRepository;
 import com.app.hubble.util.PageResponse;
@@ -28,7 +26,6 @@ public class PrescriptionService {
     private final PrescriptionRepository prescriptionRepository;
     private final MedicalConsultationRepository medicalConsultationRepository;
     private final UserRepository userRepository;
-    private final PatientRepository patientRepository;
 
     public Mono<PageResponse<PrescriptionResponse>> findAllPrescriptions(int page, int size) {
         int offset = page * size;
@@ -46,9 +43,7 @@ public class PrescriptionService {
                     if (user.getRole() == UserRole.ADMIN) {
                         return findAllPrescriptions(page, size);
                     }
-                    return patientRepository.findByUserIdAndDeletedAtIsNull(userId)
-                            .switchIfEmpty(Mono.error(new ForbiddenException("Se requiere perfil de paciente.")))
-                            .flatMap(ignored -> pagePrescriptionsForPatientUser(userId, page, size));
+                    return pagePrescriptionsForPatientUser(userId, page, size);
                 });
     }
 

@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ExamResponse {
     private UUID id;
-    private UUID patientId;
+    private UUID userId;
     private UUID consultationId;
     private ExamType type;
     private String result;

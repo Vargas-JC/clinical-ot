@@ -3,6 +3,8 @@ CREATE SCHEMA hubble_db;
 
 SELECT *FROM hubble_db.users;
 SELECT *FROM hubble_db.user_sessions;
+SELECT *FROM hubble_db.password_resets;
+SELECT *FROM hubble_db.notifications;
 -- usuario administrador inicial
 
 INSERT INTO hubble_db.users (id, email, password_hash, full_name, phone, role, active, document_number, birth_date)

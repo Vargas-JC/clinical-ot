@@ -23,10 +23,20 @@ jobs:
           cache: maven
 
       - name: Compilar
-        run: mvn clean package
+        run: mvn clean verify
 
       - name: Ejecutar Tests
         run: mvn test
+
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.projectKey=vargas-jc \
+            -Dsonar.organization=Vargas-JC \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token=$SONAR_TOKEN
 
         #Docker
       - name: Iniciar sesión en Docker Hub

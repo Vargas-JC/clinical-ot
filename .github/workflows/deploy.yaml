@@ -27,3 +27,17 @@ jobs:
 
       - name: Ejecutar Tests
         run: mvn test
+
+        #Docker
+      - name: Iniciar sesión en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }} # Tu usuario guardado de forma segura en GitHub
+          password: ${{ secrets.DOCKERHUB_TOKEN }}    # Tu token de Docker Hub
+
+      - name: Construir y Subir Imagen de Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: jcvargasdev/hubble:latest # El nombre que tendrá tu imagen

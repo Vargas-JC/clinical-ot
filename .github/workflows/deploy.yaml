@@ -65,7 +65,7 @@ jobs:
           push: true
           tags: jcvargasdev/hubble:latest # El nombre que tendrá tu imagen
 
-      - name: Slack Success Notification
+      - name: Slack Notification Exitosa
         if: success()
         uses: 8398a7/action-slack@v3
         with:
@@ -77,7 +77,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Slack Failure Notification
+      - name: Slack Notification Fallida
         if: failure()
         uses: 8398a7/action-slack@v3
         with:

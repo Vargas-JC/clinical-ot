@@ -120,6 +120,14 @@
 				<version>5.2.0.4988</version>
 			</plugin>
 			<plugin>
+				<groupId>org.owasp</groupId>
+				<artifactId>dependency-check-maven</artifactId>
+				<version>12.1.0</version>
+				<configuration>
+					<nvdApiKey>2de6ac5b-f15c-439e-81db-83f15ab5414d</nvdApiKey>
+				</configuration>
+			</plugin>
+			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>

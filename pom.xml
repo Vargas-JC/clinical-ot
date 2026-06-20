@@ -123,9 +123,21 @@
 				<groupId>org.owasp</groupId>
 				<artifactId>dependency-check-maven</artifactId>
 				<version>12.1.0</version>
+
 				<configuration>
+					<format>HTML</format>
+					<outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory>
+					<failBuildOnCVSS>7</failBuildOnCVSS>
 					<nvdApiKey>2de6ac5b-f15c-439e-81db-83f15ab5414d</nvdApiKey>
 				</configuration>
+				<executions>
+					<execution>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
